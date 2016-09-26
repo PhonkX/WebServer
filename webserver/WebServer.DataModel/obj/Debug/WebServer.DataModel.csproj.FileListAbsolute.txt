@@ -1,0 +1,4 @@
+C:\Users\PhonkX\Documents\Visual Studio 2015\Projects\webserver\WebServer.DataModel\bin\Debug\WebServer.DataModel.dll
+C:\Users\PhonkX\Documents\Visual Studio 2015\Projects\webserver\WebServer.DataModel\bin\Debug\WebServer.DataModel.pdb
+C:\Users\PhonkX\Documents\Visual Studio 2015\Projects\webserver\WebServer.DataModel\obj\Debug\WebServer.DataModel.dll
+C:\Users\PhonkX\Documents\Visual Studio 2015\Projects\webserver\WebServer.DataModel\obj\Debug\WebServer.DataModel.pdb

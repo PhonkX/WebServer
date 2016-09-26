@@ -1,0 +1,8 @@
+c:\users\phonkx\documents\visual studio 2015\Projects\webserver\webserver\bin\Debug\webserver.exe.config
+c:\users\phonkx\documents\visual studio 2015\Projects\webserver\webserver\bin\Debug\webserver.exe
+c:\users\phonkx\documents\visual studio 2015\Projects\webserver\webserver\bin\Debug\webserver.pdb
+c:\users\phonkx\documents\visual studio 2015\Projects\webserver\webserver\obj\Debug\webserver.exe
+c:\users\phonkx\documents\visual studio 2015\Projects\webserver\webserver\obj\Debug\webserver.pdb
+C:\Users\PhonkX\documents\visual studio 2015\Projects\webserver\webserver\obj\Debug\webserver.csprojResolveAssemblyReference.cache
+C:\Users\PhonkX\Documents\Visual Studio 2015\Projects\webserver\webserver\bin\Debug\WebServer.DataModel.dll
+C:\Users\PhonkX\Documents\Visual Studio 2015\Projects\webserver\webserver\bin\Debug\WebServer.DataModel.pdb
