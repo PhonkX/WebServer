@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -27,7 +28,7 @@ namespace WebServer.DataModel
                     case 0:
                         if (!String.IsNullOrWhiteSpace(tokens[i]))
                         {
-                            var headerElements = tokens[i].Split(':');
+                            /*var headerElements = tokens[i].Split(':');
                             if (headerElements.Length >= 2)
                             {
                                 var sBuilder = new StringBuilder();
@@ -38,6 +39,17 @@ namespace WebServer.DataModel
                                 }
                                 sBuilder.Append(headerElements[headerElements.Length - 1]); // TODO: подумать, как сделать аккуратнее
                                 parsedRequest.Headers.Add(headerElements[0].Trim(), sBuilder.ToString().Trim());
+                            }
+                            else
+                            {
+                                parsedRequest.Body += tokens[i];
+                            }*/
+                            var colonPosition = tokens[i].IndexOf(":");
+                            if (colonPosition > 0)
+                            {
+                                var header = tokens[i].Substring(0, colonPosition).Trim();
+                                var headerValue = tokens[i].Substring(colonPosition + 2).Trim(); // TODO: подумать про 1
+                                parsedRequest.Headers.Add(header, headerValue);
                             }
                             else
                             {
