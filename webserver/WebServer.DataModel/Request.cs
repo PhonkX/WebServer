@@ -11,12 +11,17 @@ namespace WebServer.DataModel
     public class Request
     {
         public string Query; // TODO: разобраться, что лучше сюда сделать
-        public NameValueCollection Headers; // TODO: подумать, может, надо NameValueCollection
+        public HttpMethod Method;
+        public string RequestedResource;
+        public string Version; // TODO: разобраться, что лучше сюда сделать
+        public NameValueCollection Headers;
         public string Body;
 
         public Request()
         {
             Headers = new NameValueCollection();
+            Method = HttpMethod.GET;
+            RequestedResource = "";
             Query = "";
             Body = "";
         }

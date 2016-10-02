@@ -20,30 +20,25 @@ namespace WebServer.DataModel
             var parsedRequest = new Request();
             var tokens = request.Split('\n'); // TODO: подумать над проверками и как можно разбить по пустой строке
             int emptyStringCount = 0;
-            parsedRequest.Query = tokens[0].Trim();
-            for (int i = 1; i < tokens.Length; ++i)
+            var query = tokens[0].Trim();
+            parsedRequest.Query = query;
+            var queryElements = query.Split(' ');
+            if (queryElements.Length != 3)
+            {
+                throw new IncorrectRequestException();
+            }
+            HttpMethod method;
+            parsedRequest.Method = Enum.TryParse(queryElements[0], out method) ? method : HttpMethod.GET; // TODO: подумать, нужно ли здесь значение по умолчанию
+            parsedRequest.RequestedResource = queryElements[1];
+            parsedRequest.Version = queryElements[2].Substring(queryElements[2].IndexOf("/") + 1);
+            
+            for (int i = 1; i < tokens.Length; ++i) // TODO: отрефакторить
             {
                 switch (emptyStringCount)
                 {
                     case 0:
                         if (!String.IsNullOrWhiteSpace(tokens[i]))
                         {
-                            /*var headerElements = tokens[i].Split(':');
-                            if (headerElements.Length >= 2)
-                            {
-                                var sBuilder = new StringBuilder();
-                                for (int j = 1; j < headerElements.Length - 1; j++)
-                                {
-                                    sBuilder.Append(headerElements[j]);
-                                    sBuilder.Append(":");
-                                }
-                                sBuilder.Append(headerElements[headerElements.Length - 1]); // TODO: подумать, как сделать аккуратнее
-                                parsedRequest.Headers.Add(headerElements[0].Trim(), sBuilder.ToString().Trim());
-                            }
-                            else
-                            {
-                                parsedRequest.Body += tokens[i];
-                            }*/
                             var colonPosition = tokens[i].IndexOf(":");
                             if (colonPosition > 0)
                             {

@@ -40,9 +40,14 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="HttpMethod.cs" />
+    <Compile Include="IncorrectRequestException.cs" />
     <Compile Include="Request.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RequestParser.cs" />
+    <Compile Include="Response.cs" />
+    <Compile Include="ResponseBuilder.cs" />
+    <Compile Include="ResponseSerializer.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

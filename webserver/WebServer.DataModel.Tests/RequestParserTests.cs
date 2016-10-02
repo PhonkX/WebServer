@@ -21,7 +21,7 @@ namespace WebServer.DataModel.Tests
             requestParser = new RequestParser();
             var sBuilder = new StringBuilder();
             sBuilder
-                .Append("GET localhost:45645 HTTP 1.1\r\n")
+                .Append("GET / HTTP/1.1\r\n")
                 .Append("Connection: close\r\n\r\n")
                 .Append("Hello, world");
 
@@ -55,6 +55,30 @@ namespace WebServer.DataModel.Tests
             var parsedRequest = requestParser.ParseRequest(request);
 
             parsedRequest.Body.Should().Be("Hello, world");
+        }
+
+        [Test]
+        public void ParseRequest_ShouldReturnRequest_WithTestMethod() // TODO: подумать про объединение тестов
+        {
+            var parsedRequest = requestParser.ParseRequest(request);
+
+            parsedRequest.Method.Should().Be(HttpMethod.GET);
+        }
+
+        [Test]
+        public void ParseRequest_ShouldReturnRequest_WithTestResource()
+        {
+            var parsedRequest = requestParser.ParseRequest(request);
+
+            parsedRequest.RequestedResource.Should().Be("/");
+        }
+
+        [Test]
+        public void ParseRequest_ShouldReturnRequest_WithTestVersion() // TODO: подумать про объединение тестов
+        {
+            var parsedRequest = requestParser.ParseRequest(request);
+
+            parsedRequest.Version.Should().Be("1.1");
         }
     }
 }
