@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -17,11 +18,17 @@ namespace webserver
     {
         private TcpListener listener;
         private RequestParser requestParser;
+        private RequestReader requestReader;
+        private FileReader fileReader;
+        private MD5CryptoServiceProvider md5Computer;
 
         private Server(TcpListener listener)
         {
             this.listener = listener;
             requestParser = new RequestParser();
+            requestReader = new RequestReader();
+            fileReader = new FileReader();
+            md5Computer = new MD5CryptoServiceProvider();
         }
 
         public static Server StartNew(IPAddress startAddress, int port)
@@ -39,208 +46,205 @@ namespace webserver
         public void HandleRequest()
         {
             var client = listener.AcceptTcpClient();
-            Console.WriteLine("New client has connected.");
-            
-            Authenticate(client);
-
-            /*string Request = "";
-            // Буфер для хранения принятых от клиента данных
-            byte[] Buffer = new byte[1024];
-            // Переменная для хранения количества байт, принятых от клиента
-            int Count;
-            // Читаем из потока клиента до тех пор, пока от него поступают данные
-            while ((Count = client.GetStream().Read(Buffer, 0, Buffer.Length)) > 0)
+            Console.WriteLine("New client has connected from address {0}",
+                ((IPEndPoint) client.Client.RemoteEndPoint).Address.ToString());
+            var rawRequest = requestReader.ReadRawRequest(client);
+            var request = requestParser.ParseRequest(rawRequest);
+            //Authenticate(request, client);
+            var isAuthenticated = CheckAuthentication(request);
+            if (!CheckAuthentication(request))
             {
-                // Преобразуем эти данные в строку и добавим ее к переменной Request
-                Request += Encoding.ASCII.GetString(Buffer, 0, Count);
-                // Запрос должен обрываться последовательностью \r\n\r\n
-                // Либо обрываем прием данных сами, если длина строки Request превышает 4 килобайта
-                // Нам не нужно получать данные из POST-запроса (и т. п.), а обычный запрос
-                // по идее не должен быть больше 4 килобайт
-                if (Request.IndexOf("\r\n\r\n") >= 0 || Request.Length > 4096)
-                {
-                    break;
-                }
-            }
-
-
-            // Парсим строку запроса с использованием регулярных выражений
-            // При этом отсекаем все переменные GET-запроса
-            Match ReqMatch = Regex.Match(Request, @"^\w+\s+([^\s\?]+)[^\s]*\s+HTTP/.*|");
-
-            // Если запрос не удался
-            if (ReqMatch == Match.Empty)
-            {
-                // Передаем клиенту ошибку 400 - неверный запрос
-                SendError(client, 400);
+                var response =
+                    "HTTP/1.1 401 Unauthorized \r\nWWW-Authenticate: Digest realm=\"Enter login and password\",nonce=\'ololo\'\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                var buffer = Encoding.UTF8.GetBytes(response);
+                client.GetStream().Write(buffer, 0, buffer.Length);
                 return;
             }
 
-            // Получаем строку запроса
-            string RequestUri = ReqMatch.Groups[1].Value;
-
             // Приводим ее к изначальному виду, преобразуя экранированные символы
             // Например, "%20" -> " "
-            RequestUri = Uri.UnescapeDataString(RequestUri);
+            var requestUri = Uri.UnescapeDataString(request.RequestedResource);
 
             // Если в строке содержится двоеточие, передадим ошибку 400
             // Это нужно для защиты от URL типа http://example.com/../../file.txt
-            if (RequestUri.IndexOf("..") >= 0)
+            if (requestUri.IndexOf("..") >= 0)
             {
                 SendError(client, 400);
                 return;
             }
 
             // Если строка запроса оканчивается на "/", то добавим к ней index.html
-            if (RequestUri.EndsWith("/"))
+            if (requestUri.EndsWith("/"))
             {
-                RequestUri += "index.html";
+                requestUri += "index.html";
             }
 
-
-            string FilePath = Environment.CurrentDirectory + RequestUri.Replace(@"/", @"\");
+            string filePath = Environment.CurrentDirectory + requestUri.Replace(@"/", @"\");
 
             // Если в папке www не существует данного файла, посылаем ошибку 404
-            if (!File.Exists(FilePath))
+            if (!File.Exists(filePath))
             {
                 SendError(client, 404);
                 return;
             }
 
             // Получаем расширение файла из строки запроса
-            string Extension = RequestUri.Substring(RequestUri.LastIndexOf('.'));
+            string Extension = requestUri.Substring(requestUri.LastIndexOf('.'));
 
             // Тип содержимого
-            string ContentType = "";
+            string contentType = "";
 
             // Пытаемся определить тип содержимого по расширению файла
             switch (Extension)
             {
                 case ".htm":
                 case ".html":
-                    ContentType = "text/html";
+                    contentType = "text/html";
                     break;
                 case ".css":
-                    ContentType = "text/stylesheet";
+                    contentType = "text/stylesheet";
                     break;
                 case ".js":
-                    ContentType = "text/javascript";
+                    contentType = "text/javascript";
                     break;
                 case ".jpg":
-                    ContentType = "image/jpeg";
+                    contentType = "image/jpeg";
                     break;
                 case ".jpeg":
                 case ".png":
                 case ".gif":
-                    ContentType = "image/" + Extension.Substring(1);
+                    contentType = "image/" + Extension.Substring(1);
                     break;
                 default:
                     if (Extension.Length > 1)
                     {
-                        ContentType = "application/" + Extension.Substring(1);
+                        contentType = "application/" + Extension.Substring(1);
                     }
                     else
                     {
-                        ContentType = "application/unknown";
+                        contentType = "application/unknown";
                     }
                     break;
             }
 
             // Открываем файл, страхуясь на случай ошибки
-            FileStream FS;
+            IEnumerable<byte[]> file;
             try
             {
-                FS = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                file = fileReader.ReadFile(filePath); // TODO: подумать про результаты операций
             }
             catch (Exception)
             {
                 // Если случилась ошибка, посылаем клиенту ошибку 500
+
                 SendError(client, 500);
                 return;
             }
 
             // Посылаем заголовки
-            string Headers = "HTTP/1.1 200 OK\nContent-Type: " + ContentType + "\nContent-Length: " + FS.Length + "\n\n";
-            byte[] HeadersBuffer = Encoding.ASCII.GetBytes(Headers);
-            client.GetStream().Write(HeadersBuffer, 0, HeadersBuffer.Length);
-
-            // Пока не достигнут конец файла
-            while (FS.Position < FS.Length)
+            string headers = "HTTP/1.1 200 OK\r\nContent-Type: " + contentType + "\r\nContent-Length: " + file.Sum(x => x.Length) + "\r\n\r\n";
+            byte[] headersBuffer = Encoding.ASCII.GetBytes(headers);
+            client.GetStream().Write(headersBuffer, 0, headersBuffer.Length);
+            foreach (var filePiece in file)
             {
-                // Читаем данные из файла
-                Count = FS.Read(Buffer, 0, Buffer.Length);
-                // И передаем их клиенту
-                client.GetStream().Write(Buffer, 0, Count);
+                client.GetStream().Write(filePiece, 0, filePiece.Length);
             }
 
-            // Закроем файл и соединение
-            FS.Close();*/
             client.Close();
         }
 
-        private void Authenticate(TcpClient client)
+        private void Authenticate(Request request, TcpClient client) // TODO: вынести все ответы в одно место
         {
-            if (!CheckAuthentication(client))
+            string response;
+            byte[] buffer;
+            if (!CheckAuthentication(request))
             {
-                var response =
-                    "HTTP/1.1 401 Unauthorized \r\nWWW-Authenticate: Basic realm=\"User Visible Realm\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                var buffer = Encoding.UTF8.GetBytes(response);
+                response =
+                    "HTTP/1.1 401 Unauthorized \r\nWWW-Authenticate: Digest realm=\"User Visible Realm\", nonce=\'ololo\'\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                buffer = Encoding.UTF8.GetBytes(response);
                 client.GetStream().Write(buffer, 0, buffer.Length);
             }
+            response =
+                    "HTTP/1.1 200 Ok \r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            buffer = Encoding.UTF8.GetBytes(response);
+            client.GetStream().Write(buffer, 0, buffer.Length);
         }
 
-        private bool CheckAuthentication(TcpClient client)
+        private bool CheckAuthentication(Request request)
         {
-            string Request = "";
-            // Буфер для хранения принятых от клиента данных
-            byte[] Buffer = new byte[1024];
-            // Переменная для хранения количества байт, принятых от клиента
-            int Count;
-            // Читаем из потока клиента до тех пор, пока от него поступают данные
-            while ((Count = client.GetStream().Read(Buffer, 0, Buffer.Length)) > 0)
-            {
-                // Преобразуем эти данные в строку и добавим ее к переменной Request
-                Request += Encoding.ASCII.GetString(Buffer, 0, Count);
-                // Запрос должен обрываться последовательностью \r\n\r\n
-                // Либо обрываем прием данных сами, если длина строки Request превышает 4 килобайта
-                // Нам не нужно получать данные из POST-запроса (и т. п.), а обычный запрос
-                // по идее не должен быть больше 4 килобайт
-                if (Request.IndexOf("\r\n\r\n") >= 0 || Request.Length > 4096)
-                {
-                    break;
-                }
-            }
-
-            var parsedRequest = requestParser.ParseRequest(Request);
-            var loginPasswordString = parsedRequest.Headers["Authorization"];
-            if (String.IsNullOrWhiteSpace(loginPasswordString))
+            var authString = request.Headers["Authorization"];
+            if (String.IsNullOrWhiteSpace(authString))
             {
                 return false;
             }
 
-            var loginPass = Encoding.UTF8.GetString(Convert.FromBase64String(loginPasswordString.Split(' ')[1])).Split(':');
+            var authStringElements = authString.Split(',');
+            var userNameString = authStringElements.FirstOrDefault(x => x.Contains("username"));
+            var responseString = authStringElements.FirstOrDefault(x => x.Contains("response"));
+            var nonceString = authStringElements.FirstOrDefault(x => x.Contains("nonce"));
+            if (String.IsNullOrWhiteSpace(userNameString)
+                || String.IsNullOrWhiteSpace(responseString)
+                || String.IsNullOrWhiteSpace(nonceString))
+            {
+                return false;
+            }
+
+            var userName = userNameString.Split('=')[1].Trim(new [] { '\\', '\"' });
+            if (userName != "au")
+            {
+                return false;
+            }
+            
+            var nonce = nonceString.Split('=')[1].Trim(new[] { '\\', '\"' });
+            var response = responseString.Split('=')[1].Trim(new[] { '\\', '\"' });
+            //var loginPass = Encoding.UTF8.GetString(Convert.FromBase64String(loginPasswordString.Split(' ')[1])).Split(':');
             // Там base64
+            var password = "ololo";
+            var serverSideAuthA1String = new StringBuilder() // как на Вики - A1
+                .Append(userName)
+                .Append(":")
+                .Append("Enter login and password")
+                .Append(":")
+                .Append(password)
+                .ToString();
+            //var authA1Md5 = Encoding.ASCII.GetString(md5Computer.ComputeHash(Encoding.ASCII.GetBytes(serverSideAuthA1String)));
+            var authA1Md5 = ComputeMD5Hash(serverSideAuthA1String);
+            // TODO: сделать сущность, считающие хэши
+            var serverSideAuthA2String = new StringBuilder() // как на Вики - A2
+                .Append(request.Method)
+                .Append(":")
+                .Append(request.RequestedResource)
+                .ToString();
+            var authA2Md5 = ComputeMD5Hash(serverSideAuthA2String);
 
-            // Парсим строку запроса с использованием регулярных выражений
-            // При этом отсекаем все переменные GET-запроса
-            /*Match ReqMatch = Regex.Match(Request, @"Authorization:.*^[\r\n]");
+            var serverSideAuthString = new StringBuilder() // как на Вики - A1
+                .Append(authA1Md5)
+                .Append(":")
+                .Append(nonce)
+                .Append(":")
+                .Append(authA2Md5)
+                .ToString();
 
-            // Если запрос не удался
-            if (ReqMatch == Match.Empty)
+            var authMd5 = ComputeMD5Hash(serverSideAuthString);
+
+            if (authMd5 != response)
             {
-                // Передаем клиенту ошибку 400 - неверный запрос
                 return false;
             }
 
-            // Получаем строку запроса
-            var str = ReqMatch.Groups[1].Value.Split(' ');
-            if (str.Length < 3)
-                return true;
-            var loginPass = Encoding.UTF8.GetString(Convert.FromBase64String(str[2])).Split(':');
-            */
-            if (loginPass.Length == 2 && loginPass[0] == "au" && loginPass[1] == "ololo")
-                return true;
-            return false;
+            return true;
+        }
+
+        private string ComputeMD5Hash(string s) // TODO: вынести в другой класс
+        {
+            var stringBytes = s.Select(c => Convert.ToByte(c));
+            var stream = new MemoryStream();
+            foreach (var stringByte in stringBytes)
+            {
+                stream.WriteByte(stringByte);
+            }
+            var hash = md5Computer.ComputeHash(stream.ToArray()).Select(x => x.ToString("x2"));
+            return String.Join("", hash);
         }
 
         private void SendError(TcpClient Client, int Code)

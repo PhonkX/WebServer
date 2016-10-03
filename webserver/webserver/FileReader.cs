@@ -13,10 +13,10 @@ namespace webserver
         {
             using (var fs = File.OpenRead(filename))
             {
-                byte[] b = new byte[1024];
-                while (fs.Read(b, 0, b.Length) > 0)
+                byte[] buffer = new byte[1024];
+                while (fs.Read(buffer, 0, buffer.Length) > 0)
                 {
-                    yield return b;
+                    yield return buffer;
                 }
             }
         }
