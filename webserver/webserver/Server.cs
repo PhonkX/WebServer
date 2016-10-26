@@ -20,7 +20,7 @@ namespace webserver
         private RequestParser requestParser;
         private RequestReader requestReader;
         private FileReader fileReader;
-        private MD5CryptoServiceProvider md5Computer;
+        private IAuthenticator authenticator;
 
         private Server(TcpListener listener)
         {
@@ -28,7 +28,7 @@ namespace webserver
             requestParser = new RequestParser();
             requestReader = new RequestReader();
             fileReader = new FileReader();
-            md5Computer = new MD5CryptoServiceProvider();
+            authenticator = new Authenticator();
         }
 
         public static Server StartNew(IPAddress startAddress, int port)
@@ -51,19 +51,33 @@ namespace webserver
             var rawRequest = requestReader.ReadRawRequest(client);
             var request = requestParser.ParseRequest(rawRequest);
             //Authenticate(request, client);
-            var isAuthenticated = CheckAuthentication(request);
-            if (!CheckAuthentication(request))
+
+            var cookie = request.Headers["Cookie"];
+
+            if (String.IsNullOrWhiteSpace(cookie)) // TODO: проверять параметры куки (sid, не протухла ли)
             {
-                var response =
-                    "HTTP/1.1 401 Unauthorized \r\nWWW-Authenticate: Digest realm=\"Enter login and password\",nonce=\'ololo\'\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                var buffer = Encoding.UTF8.GetBytes(response);
-                client.GetStream().Write(buffer, 0, buffer.Length);
-                return;
+                var isAuthenticated = authenticator.CheckAuthentication(request);
+                if (!isAuthenticated)
+                {
+                    //var response =
+                    //  "HTTP/1.1 401 Unauthorized \r\nWWW-Authenticate: Digest realm=\"Enter login and password\",nonce=\'ololo\'\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    var authPage = fileReader.ReadFile(Environment.CurrentDirectory + "\\auth.html");
+                    var response = String.Format(
+                        "HTTP/1.1 401 Unauthorized \r\nContent-type: text/html\r\nContent-Length: {0}\r\nConnection: close\r\n\r\n",
+                        1024*authPage.Count()); // 1024 ли?
+                    var buffer = Encoding.UTF8.GetBytes(response);
+                    client.GetStream().Write(buffer, 0, buffer.Length);
+                    foreach (var element in authPage)
+                    {
+                        client.GetStream().Write(element, 0, element.Length);
+                    }
+                    return;
+                }
             }
 
             // Приводим ее к изначальному виду, преобразуя экранированные символы
             // Например, "%20" -> " "
-            var requestUri = Uri.UnescapeDataString(request.RequestedResource);
+            var requestUri = request.RequestedUri.ToString();
 
             // Если в строке содержится двоеточие, передадим ошибку 400
             // Это нужно для защиты от URL типа http://example.com/../../file.txt
@@ -142,7 +156,17 @@ namespace webserver
             }
 
             // Посылаем заголовки
-            string headers = "HTTP/1.1 200 OK\r\nContent-Type: " + contentType + "\r\nContent-Length: " + file.Sum(x => x.Length) + "\r\n\r\n";
+            string headers;
+            if (String.IsNullOrWhiteSpace(cookie)) // TODO: сделать нормально
+            {
+                headers = "HTTP/1.1 200 OK\r\nSet-Cookie: RMID=732423sdfs73242; expires=Fri, 31 Oct 2016 23:59:59 GMT; path=/; domain=localhost\r\nContent-Type: " + contentType + "\r\nContent-Length: " +
+                          file.Sum(x => x.Length) + "\r\n\r\n";
+            }
+            else
+            {
+                headers = "HTTP/1.1 200 OK\r\nContent-Type: " + contentType + "\r\nContent-Length: " +
+                          file.Sum(x => x.Length) + "\r\n\r\n";
+            }
             byte[] headersBuffer = Encoding.ASCII.GetBytes(headers);
             client.GetStream().Write(headersBuffer, 0, headersBuffer.Length);
             foreach (var filePiece in file)
@@ -157,7 +181,7 @@ namespace webserver
         {
             string response;
             byte[] buffer;
-            if (!CheckAuthentication(request))
+            if (!authenticator.CheckAuthentication(request))
             {
                 response =
                     "HTTP/1.1 401 Unauthorized \r\nWWW-Authenticate: Digest realm=\"User Visible Realm\", nonce=\'ololo\'\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
@@ -168,83 +192,6 @@ namespace webserver
                     "HTTP/1.1 200 Ok \r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
             buffer = Encoding.UTF8.GetBytes(response);
             client.GetStream().Write(buffer, 0, buffer.Length);
-        }
-
-        private bool CheckAuthentication(Request request)
-        {
-            var authString = request.Headers["Authorization"];
-            if (String.IsNullOrWhiteSpace(authString))
-            {
-                return false;
-            }
-
-            var authStringElements = authString.Split(',');
-            var userNameString = authStringElements.FirstOrDefault(x => x.Contains("username"));
-            var responseString = authStringElements.FirstOrDefault(x => x.Contains("response"));
-            var nonceString = authStringElements.FirstOrDefault(x => x.Contains("nonce"));
-            if (String.IsNullOrWhiteSpace(userNameString)
-                || String.IsNullOrWhiteSpace(responseString)
-                || String.IsNullOrWhiteSpace(nonceString))
-            {
-                return false;
-            }
-
-            var userName = userNameString.Split('=')[1].Trim(new [] { '\\', '\"' });
-            if (userName != "au")
-            {
-                return false;
-            }
-            
-            var nonce = nonceString.Split('=')[1].Trim(new[] { '\\', '\"' });
-            var response = responseString.Split('=')[1].Trim(new[] { '\\', '\"' });
-            //var loginPass = Encoding.UTF8.GetString(Convert.FromBase64String(loginPasswordString.Split(' ')[1])).Split(':');
-            // Там base64
-            var password = "ololo";
-            var serverSideAuthA1String = new StringBuilder() // как на Вики - A1
-                .Append(userName)
-                .Append(":")
-                .Append("Enter login and password")
-                .Append(":")
-                .Append(password)
-                .ToString();
-            //var authA1Md5 = Encoding.ASCII.GetString(md5Computer.ComputeHash(Encoding.ASCII.GetBytes(serverSideAuthA1String)));
-            var authA1Md5 = ComputeMD5Hash(serverSideAuthA1String);
-            // TODO: сделать сущность, считающие хэши
-            var serverSideAuthA2String = new StringBuilder() // как на Вики - A2
-                .Append(request.Method)
-                .Append(":")
-                .Append(request.RequestedResource)
-                .ToString();
-            var authA2Md5 = ComputeMD5Hash(serverSideAuthA2String);
-
-            var serverSideAuthString = new StringBuilder() // как на Вики - A1
-                .Append(authA1Md5)
-                .Append(":")
-                .Append(nonce)
-                .Append(":")
-                .Append(authA2Md5)
-                .ToString();
-
-            var authMd5 = ComputeMD5Hash(serverSideAuthString);
-
-            if (authMd5 != response)
-            {
-                return false;
-            }
-
-            return true;
-        }
-
-        private string ComputeMD5Hash(string s) // TODO: вынести в другой класс
-        {
-            var stringBytes = s.Select(c => Convert.ToByte(c));
-            var stream = new MemoryStream();
-            foreach (var stringByte in stringBytes)
-            {
-                stream.WriteByte(stringByte);
-            }
-            var hash = md5Computer.ComputeHash(stream.ToArray()).Select(x => x.ToString("x2"));
-            return String.Join("", hash);
         }
 
         private void SendError(TcpClient Client, int Code)

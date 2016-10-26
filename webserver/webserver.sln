@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebServer.DataModel", "WebS
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebServer.DataModel.Tests", "WebServer.DataModel.Tests\WebServer.DataModel.Tests.csproj", "{8DB05C00-AAD6-4862-8ABC-5C522FB6360D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Logging", "Logging\Logging.csproj", "{20DAF99C-77C2-4CAA-95BF-840462EF245A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{8DB05C00-AAD6-4862-8ABC-5C522FB6360D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8DB05C00-AAD6-4862-8ABC-5C522FB6360D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8DB05C00-AAD6-4862-8ABC-5C522FB6360D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{20DAF99C-77C2-4CAA-95BF-840462EF245A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{20DAF99C-77C2-4CAA-95BF-840462EF245A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{20DAF99C-77C2-4CAA-95BF-840462EF245A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{20DAF99C-77C2-4CAA-95BF-840462EF245A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

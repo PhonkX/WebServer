@@ -12,18 +12,20 @@ namespace WebServer.DataModel
     {
         public string Query; // TODO: разобраться, что лучше сюда сделать
         public HttpMethod Method;
-        public string RequestedResource;
+        public string RequestedUri;
         public string Version; // TODO: разобраться, что лучше сюда сделать
+        public NameValueCollection QueryParameters; 
         public NameValueCollection Headers;
         public string Body;
-
+        // TODO: добавить параметры и сделать их парсинг с помощью HttpUtility
         public Request()
         {
             Headers = new NameValueCollection();
             Method = HttpMethod.GET;
-            RequestedResource = "";
+            RequestedUri = null;
             Query = "";
             Body = "";
+            QueryParameters	= new NameValueCollection();
         }
     }
 }

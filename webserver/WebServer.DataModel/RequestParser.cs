@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using System.Web;
 
 namespace WebServer.DataModel
 {
@@ -23,15 +25,21 @@ namespace WebServer.DataModel
             var query = tokens[0].Trim();
             parsedRequest.Query = query;
             var queryElements = query.Split(' ');
-            if (queryElements.Length != 3)
+            if (queryElements.Length < 3)
             {
                 throw new IncorrectRequestException();
             }
             HttpMethod method;
             parsedRequest.Method = Enum.TryParse(queryElements[0], out method) ? method : HttpMethod.GET; // TODO: подумать, нужно ли здесь значение по умолчанию
-            parsedRequest.RequestedResource = queryElements[1];
+            //parsedRequest.RequestedUri = new Uri(Uri.UnescapeDataString("http://localhost" + queryElements[1]));
             parsedRequest.Version = queryElements[2].Substring(queryElements[2].IndexOf("/") + 1);
-            
+            var pathTokens = Uri.UnescapeDataString(queryElements[1]).Split('?');
+            parsedRequest.RequestedUri = pathTokens[0];
+            if (pathTokens.Length >= 2)
+            {
+                parsedRequest.QueryParameters = GetParametersFromQuery(pathTokens[1]);
+            }
+
             for (int i = 1; i < tokens.Length; ++i) // TODO: отрефакторить
             {
                 switch (emptyStringCount)
@@ -66,6 +74,22 @@ namespace WebServer.DataModel
             }
 
             return parsedRequest;
+        }
+
+        private NameValueCollection GetParametersFromQuery(string parametersString)
+        {
+            var parsedParameters = new NameValueCollection();
+            var parameters = parametersString.Split('&');
+            foreach (var stringParameter in parameters)
+            {
+                if (!String.IsNullOrWhiteSpace(stringParameter))
+                {
+                    var tokens = stringParameter.Split('=');
+                    parsedParameters.Add(tokens[0], tokens[1]);
+                }
+            }
+
+            return parsedParameters;
         }
     }
 }
